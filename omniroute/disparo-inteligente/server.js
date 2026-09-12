@@ -777,6 +777,126 @@ app.patch('/schedule/:id', requireAuth, asyncRoute(async (req, res) => {
   return res.json(result.rows[0]);
 }));
 
+const automationInput = z.object({
+  name: z.string().trim().min(2).max(120),
+  triggerType: z.enum(['message_received', 'keyword', 'campaign_finished', 'schedule']),
+  triggerConfig: z.record(z.unknown()).default({}),
+  conditionConfig: z.record(z.unknown()).default({}),
+  actionConfig: z.record(z.unknown()).default({}),
+  enabled: z.boolean().optional()
+});
+const agentInput = z.object({
+  name: z.string().trim().min(2).max(120),
+  provider: z.string().trim().min(2).max(60).default('openai'),
+  model: z.string().trim().min(2).max(80).default('gpt-4o-mini'),
+  systemPrompt: z.string().trim().min(10).max(20000),
+  enabled: z.boolean().optional()
+});
+const faqInput = z.object({ question: z.string().trim().min(3).max(500), answer: z.string().trim().min(1).max(5000) });
+const sequenceInput = z.object({
+  name: z.string().trim().min(2).max(120),
+  stopOnReply: z.boolean().optional(),
+  enabled: z.boolean().optional(),
+  steps: z.array(z.object({ stepOrder: z.number().int().nonnegative(), delayDays: z.number().int().nonnegative(), body: z.string().trim().min(1).max(10000) })).min(1).max(30)
+});
+
+app.get('/automations', requireAuth, asyncRoute(async (req, res) => {
+  const result = await databasePool.query('select * from public.automation_flows where user_id = $1 order by created_at desc', [req.auth.sub]);
+  return res.json(result.rows);
+}));
+app.post('/automations', requireAuth, asyncRoute(async (req, res) => {
+  const input = validated(automationInput, req.body, res);
+  if (!input) return;
+  const result = await databasePool.query('insert into public.automation_flows (user_id, name, trigger_type, trigger_config, condition_config, action_config, enabled) values ($1, $2, $3, $4, $5, $6, $7) returning *', [req.auth.sub, input.name, input.triggerType, JSON.stringify(input.triggerConfig), JSON.stringify(input.conditionConfig), JSON.stringify(input.actionConfig), input.enabled ?? true]);
+  return res.status(201).json(result.rows[0]);
+}));
+app.patch('/automations/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  const input = validated(automationInput.partial(), req.body, res);
+  if (!id || !input) return;
+  const result = await databasePool.query('update public.automation_flows set name = coalesce($1, name), trigger_type = coalesce($2, trigger_type), trigger_config = coalesce($3, trigger_config), condition_config = coalesce($4, condition_config), action_config = coalesce($5, action_config), enabled = coalesce($6, enabled), updated_at = now() where id = $7 and user_id = $8 returning *', [input.name, input.triggerType, input.triggerConfig ? JSON.stringify(input.triggerConfig) : null, input.conditionConfig ? JSON.stringify(input.conditionConfig) : null, input.actionConfig ? JSON.stringify(input.actionConfig) : null, input.enabled, id, req.auth.sub]);
+  if (!result.rows[0]) return authError(res, 404, 'AUTOMATION_NOT_FOUND', 'Automação não encontrada.');
+  return res.json(result.rows[0]);
+}));
+app.delete('/automations/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  if (!id) return;
+  const result = await databasePool.query('delete from public.automation_flows where id = $1 and user_id = $2 returning id', [id, req.auth.sub]);
+  if (!result.rows[0]) return authError(res, 404, 'AUTOMATION_NOT_FOUND', 'Automação não encontrada.');
+  return res.status(204).send();
+}));
+
+app.get('/ai-agents', requireAuth, asyncRoute(async (req, res) => {
+  const agents = await databasePool.query('select id, user_id, name, provider, model, system_prompt, enabled, created_at, updated_at from public.ai_agents where user_id = $1 order by updated_at desc', [req.auth.sub]);
+  return res.json(agents.rows);
+}));
+app.post('/ai-agents', requireAuth, asyncRoute(async (req, res) => {
+  const input = validated(agentInput, req.body, res);
+  if (!input) return;
+  const result = await databasePool.query('insert into public.ai_agents (user_id, name, provider, model, system_prompt, enabled) values ($1, $2, $3, $4, $5, $6) returning id, user_id, name, provider, model, system_prompt, enabled, created_at, updated_at', [req.auth.sub, input.name, input.provider, input.model, input.systemPrompt, input.enabled ?? false]);
+  return res.status(201).json(result.rows[0]);
+}));
+app.patch('/ai-agents/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  const input = validated(agentInput.partial(), req.body, res);
+  if (!id || !input) return;
+  const result = await databasePool.query('update public.ai_agents set name = coalesce($1, name), provider = coalesce($2, provider), model = coalesce($3, model), system_prompt = coalesce($4, system_prompt), enabled = coalesce($5, enabled), updated_at = now() where id = $6 and user_id = $7 returning id, user_id, name, provider, model, system_prompt, enabled, created_at, updated_at', [input.name, input.provider, input.model, input.systemPrompt, input.enabled, id, req.auth.sub]);
+  if (!result.rows[0]) return authError(res, 404, 'AGENT_NOT_FOUND', 'Agente não encontrado.');
+  return res.json(result.rows[0]);
+}));
+app.delete('/ai-agents/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  if (!id) return;
+  await databasePool.query('delete from public.ai_agents where id = $1 and user_id = $2', [id, req.auth.sub]);
+  return res.status(204).send();
+}));
+app.get('/ai-agents/:id/faq', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  if (!id) return;
+  const result = await databasePool.query('select f.* from public.ai_faq_entries f join public.ai_agents a on a.id = f.agent_id where f.agent_id = $1 and a.user_id = $2 order by f.created_at desc', [id, req.auth.sub]);
+  return res.json(result.rows);
+}));
+app.post('/ai-agents/:id/faq', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  const input = validated(faqInput, req.body, res);
+  if (!id || !input) return;
+  const result = await databasePool.query('insert into public.ai_faq_entries (agent_id, question, answer) select $1, $2, $3 where exists (select 1 from public.ai_agents where id = $1 and user_id = $4) returning *', [id, input.question, input.answer, req.auth.sub]);
+  if (!result.rows[0]) return authError(res, 404, 'AGENT_NOT_FOUND', 'Agente não encontrado.');
+  return res.status(201).json(result.rows[0]);
+}));
+
+app.get('/follow-ups', requireAuth, asyncRoute(async (req, res) => {
+  const result = await databasePool.query('select s.*, coalesce(json_agg(st order by st.step_order) filter (where st.id is not null), \'[]\') as steps from public.follow_up_sequences s left join public.follow_up_steps st on st.sequence_id = s.id where s.user_id = $1 group by s.id order by s.updated_at desc', [req.auth.sub]);
+  return res.json(result.rows);
+}));
+app.post('/follow-ups', requireAuth, asyncRoute(async (req, res) => {
+  const input = validated(sequenceInput, req.body, res);
+  if (!input) return;
+  const client = await databasePool.connect();
+  try {
+    await client.query('begin');
+    const sequence = await client.query('insert into public.follow_up_sequences (user_id, name, stop_on_reply, enabled) values ($1, $2, $3, $4) returning *', [req.auth.sub, input.name, input.stopOnReply ?? true, input.enabled ?? true]);
+    for (const step of input.steps) await client.query('insert into public.follow_up_steps (sequence_id, step_order, delay_days, body) values ($1, $2, $3, $4)', [sequence.rows[0].id, step.stepOrder, step.delayDays, step.body]);
+    await client.query('commit');
+    return res.status(201).json({ ...sequence.rows[0], steps: input.steps });
+  } catch (error) { await client.query('rollback'); throw error; } finally { client.release(); }
+}));
+app.patch('/follow-ups/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  const input = validated(sequenceInput.partial(), req.body, res);
+  if (!id || !input) return;
+  const result = await databasePool.query('update public.follow_up_sequences set name = coalesce($1, name), stop_on_reply = coalesce($2, stop_on_reply), enabled = coalesce($3, enabled), updated_at = now() where id = $4 and user_id = $5 returning *', [input.name, input.stopOnReply, input.enabled, id, req.auth.sub]);
+  if (!result.rows[0]) return authError(res, 404, 'FOLLOW_UP_NOT_FOUND', 'Sequência não encontrada.');
+  return res.json(result.rows[0]);
+}));
+app.delete('/follow-ups/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  if (!id) return;
+  const result = await databasePool.query('delete from public.follow_up_sequences where id = $1 and user_id = $2 returning id', [id, req.auth.sub]);
+  if (!result.rows[0]) return authError(res, 404, 'FOLLOW_UP_NOT_FOUND', 'Sequência não encontrada.');
+  return res.status(204).send();
+}));
+
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
   console.error('API error:', error.code || error.message);

@@ -12,6 +12,7 @@
     "migrate": "node scripts/run-migrations.js",
     "test:api": "node scripts/test-api.js",
     "test:onda2": "node scripts/test-onda2.js",
+    "test:onda3": "node scripts/test-onda3.js",
     "test:upload": "node scripts/test-upload.js",
     "storage:ensure": "node scripts/ensure-storage-bucket.js"
   },
