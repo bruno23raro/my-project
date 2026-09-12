@@ -3,7 +3,7 @@ services:
     name: disparo-inteligente
     runtime: node
     rootDir: omniroute
-    buildCommand: npm install
+    buildCommand: npm install --prefix disparo-inteligente
     startCommand: npm start
     healthCheckPath: /api/health
     envVars:

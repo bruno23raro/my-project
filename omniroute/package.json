@@ -4,6 +4,9 @@
   "private": true,
   "description": "Operação de conteúdo em escala",
   "scripts": {
-    "start": "node server.js"
+    "start": "node disparo-inteligente/server.js",
+    "migrate": "node disparo-inteligente/scripts/run-migrations.js",
+    "seed": "node disparo-inteligente/scripts/seed-admin.js",
+    "check": "tsc --noEmit"
   }
 }
