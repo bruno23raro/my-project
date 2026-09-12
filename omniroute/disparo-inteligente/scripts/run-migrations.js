@@ -10,6 +10,7 @@ const migrationFiles = fs.readdirSync(migrationDir)
 
 const client = new Client({
   connectionString: process.env.DATABASE_URL,
+  family: 4,
   ssl: { rejectUnauthorized: false }
 });
 

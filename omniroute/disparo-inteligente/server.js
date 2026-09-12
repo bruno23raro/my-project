@@ -27,7 +27,7 @@ const supabaseJwksUrl = process.env.SUPABASE_JWKS_URL || `${supabaseUrl}/auth/v1
 const accessTokenSecret = process.env.JWT_ACCESS_SECRET || process.env.JWT_SECRET || '';
 const refreshTokenDays = 7;
 const databasePool = process.env.DATABASE_URL
-  ? new Pool({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false } })
+  ? new Pool({ connectionString: process.env.DATABASE_URL, family: 4, ssl: { rejectUnauthorized: false } })
   : null;
 const uploadDir = path.join(rootDir, 'uploads');
 const imageUpload = multer({
