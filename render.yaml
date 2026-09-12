@@ -2,7 +2,6 @@ services:
   - type: web
     name: disparo-inteligente
     runtime: node
-    rootDir: omniroute/disparo-inteligente
     buildCommand: npm install
     startCommand: npm start
     healthCheckPath: /api/health
