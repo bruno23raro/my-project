@@ -1,4 +1,5 @@
 const path = require('path');
+const dns = require('dns');
 const bcrypt = require('bcryptjs');
 const { Pool } = require('pg');
 require('dotenv').config({ path: path.join(__dirname, '..', '.env') });
@@ -15,6 +16,7 @@ if (!process.env.DATABASE_URL) {
 const pool = new Pool({
 	connectionString: process.env.DATABASE_URL,
 	family: 4,
+	lookup: (hostname, options, callback) => dns.lookup(hostname, { ...options, family: 4 }, callback),
 	ssl: { rejectUnauthorized: false }
 });
 
