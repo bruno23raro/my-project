@@ -1,0 +1,9 @@
+{
+  "name": "postagend",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Operação de conteúdo em escala",
+  "scripts": {
+    "start": "node server.js"
+  }
+}

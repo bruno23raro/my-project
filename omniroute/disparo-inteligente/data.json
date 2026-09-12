@@ -1,0 +1,110 @@
+{
+  "site": {
+    "name": "Disparo Inteligente",
+    "primaryColor": "#7c3aed",
+    "secondaryColor": "#0ea5e9",
+    "accentColor": "#10b981",
+    "logoText": "DISPARO INTELIGENTE",
+    "heroTitle": "Automatize vendas e atendimento em WhatsApp e Instagram.",
+    "heroSubtitle": "Crie campanhas em massa, ative chatbots e conecte sua operação à sua rotina comercial.",
+    "ctaPrimary": "Testar grátis",
+    "ctaSecondary": "Ver demonstração",
+    "sections": [
+      "beneficios",
+      "planos",
+      "depoimentos",
+      "faq"
+    ],
+    "isPublic": true
+  },
+  "plans": [
+    {
+      "id": "free",
+      "name": "Free",
+      "price": 0,
+      "limits": {
+        "maxCampaigns": 3,
+        "maxContacts": 200,
+        "whatsappConnections": 1,
+        "instagramConnections": 0,
+        "aiBots": 1
+      },
+      "featured": false
+    },
+    {
+      "id": "pro",
+      "name": "Pro",
+      "price": 59,
+      "limits": {
+        "maxCampaigns": 50,
+        "maxContacts": 15000,
+        "whatsappConnections": 3,
+        "instagramConnections": 1,
+        "aiBots": 5
+      },
+      "featured": true
+    },
+    {
+      "id": "unlimited",
+      "name": "Ilimitado",
+      "price": 149,
+      "limits": {
+        "maxCampaigns": 9999,
+        "maxContacts": 999999,
+        "whatsappConnections": 20,
+        "instagramConnections": 10,
+        "aiBots": 999
+      },
+      "featured": false
+    }
+  ],
+  "users": [
+    {
+      "id": "admin-1",
+      "name": "Bruno Almeida",
+      "email": "brunoalmeida23111996@gmail.com",
+      "passwordHash": "$2a$10$B4V5b8MxzB67ztiWjXdZiucz4fgVdq21RT4m7cKnPQUak1tbW6dAu",
+      "role": "admin",
+      "plan": "unlimited",
+      "createdAt": "2026-09-11T23:50:59.922Z",
+      "status": "active"
+    }
+  ],
+  "campaigns": [],
+  "settings": {
+    "whatsappApi": "",
+    "instagramApi": "",
+    "hotmartApi": "",
+    "kiwifyApi": "",
+    "smtpHost": "",
+    "smtpUser": "",
+    "smtpPassword": "",
+    "paymentProvider": ""
+  },
+  "integrations": [
+    {
+      "id": "whatsapp",
+      "name": "WhatsApp",
+      "enabled": false,
+      "key": ""
+    },
+    {
+      "id": "instagram",
+      "name": "Instagram",
+      "enabled": false,
+      "key": ""
+    },
+    {
+      "id": "hotmart",
+      "name": "Hotmart",
+      "enabled": false,
+      "key": ""
+    },
+    {
+      "id": "kiwify",
+      "name": "Kiwify",
+      "enabled": false,
+      "key": ""
+    }
+  ]
+}

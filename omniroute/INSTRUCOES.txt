@@ -1,0 +1,33 @@
+POSTAGEND - COMO ABRIR
+
+1. Abra o PowerShell.
+2. Cole este comando:
+   cd c:\Users\user\my-project\omniroute
+3. Inicie o sistema:
+   npm start
+4. Abra o navegador em:
+   http://localhost:5500
+
+Para criar um post:
+- Clique em "Novo conteúdo".
+- Envie uma imagem ou vídeo.
+- Clique em "Gerar legenda" ou escreva sua própria legenda.
+- Escolha a rede, data e horário.
+- Clique em "Agendar publicação".
+
+Para parar o servidor, volte ao PowerShell e pressione Ctrl+C.
+
+USAR SUPABASE
+
+1. Crie um projeto em supabase.com.
+2. No painel, abra SQL Editor.
+3. Abra a pasta supabase e copie todo o conteúdo de schema.sql.
+4. Cole no SQL Editor e clique em Run.
+5. Vá em Project Settings > API e copie Project URL e service_role key.
+6. Na pasta do projeto, faça uma cópia de .env.example com o nome .env.
+7. Preencha SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY no .env.
+8. Rode npm start novamente.
+
+Nunca coloque a service_role key no index.html ou no app.js.
+Sem Supabase configurado, o sistema usa postagend-data.json automaticamente.
+As redes sociais ainda precisam ser conectadas por OAuth e APIs oficiais antes de publicar de verdade.

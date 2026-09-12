@@ -1,0 +1,4 @@
+node_modules/
+.env
+postagend-data.json
+*.zip
