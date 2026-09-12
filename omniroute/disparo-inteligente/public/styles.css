@@ -325,11 +325,30 @@ button { cursor: pointer; border: none; }
 .toast { position:fixed; z-index:50; right:22px; bottom:22px; max-width:min(360px,calc(100% - 44px)); padding:14px 16px; border-radius:12px; color:#fff; background:#0f172a; box-shadow:var(--shadow); animation:toast-in .2s ease-out; font-size:.88rem; }
 .toast.error { background:#be123c; }
 .toast.info { background:#0369a1; }
+.inbox-layout { display:grid; grid-template-columns:minmax(260px,.75fr) minmax(0,1.25fr); gap:18px; min-height:520px; }
+.conversation-list { padding:14px; }
+.conversation-list .panel-title { padding:6px; margin-bottom:8px; }
+.conversation-item { width:100%; display:grid; gap:5px; text-align:left; padding:14px 12px; margin-bottom:6px; border:1px solid transparent; border-radius:12px; background:#f8fafc; color:var(--text); }
+.conversation-item:hover { border-color:var(--primary); background:#fff; }
+.conversation-item small { color:var(--muted); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.conversation-item .tag { justify-self:start; }
+.conversation-detail { display:flex; flex-direction:column; }
+.conversation-detail .panel-title { margin-bottom:12px; }
+.message-thread { flex:1; display:flex; flex-direction:column; gap:10px; padding:12px 0; overflow:auto; }
+.message-bubble { max-width:78%; padding:12px 14px; border-radius:14px; background:#f1f5f9; align-self:flex-start; }
+.message-bubble.outbound { background:#ede9fe; align-self:flex-end; }
+.message-bubble p { margin:0 0 5px; line-height:1.5; }
+.message-bubble small { color:var(--muted); font-size:.68rem; }
+.reply-box { display:grid; gap:10px; border-top:1px solid var(--line); padding-top:14px; }
+.template-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:16px; margin-top:18px; }
+.template-card { min-height:170px; }
+.template-card p { white-space:pre-wrap; margin:14px 0; }
+.template-card small { color:var(--muted); }
 @keyframes toast-in { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
 .hidden { display: none; }
 @media (max-width: 900px) {
   .hero-inner, .grid-3, .grid-two, .stats { grid-template-columns: 1fr; }
-  .admin-grid, .integration-grid, .plan-admin-grid, .two-col { grid-template-columns:1fr; }
+  .admin-grid, .integration-grid, .plan-admin-grid, .two-col, .inbox-layout, .template-grid { grid-template-columns:1fr; }
   .nav-links { display: none; }
   .sidebar { width: 100%; }
   .app-shell { display: block; }

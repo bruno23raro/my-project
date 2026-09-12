@@ -653,6 +653,130 @@ app.post('/api/campaigns', (req, res) => {
   res.status(201).json(campaign);
 });
 
+const conversationInput = z.object({
+  contactId: z.string().uuid(),
+  channel: z.enum(['whatsapp', 'instagram']),
+  body: z.string().trim().min(1).max(10000)
+});
+const templateInput = z.object({
+  name: z.string().trim().min(2).max(120),
+  body: z.string().trim().min(1).max(10000),
+  channel: z.enum(['whatsapp', 'instagram', 'both']).default('whatsapp'),
+  approvalStatus: z.enum(['draft', 'pending', 'approved', 'rejected']).optional()
+});
+const scheduleInput = z.object({
+  campaignId: z.string().uuid().optional().nullable(),
+  templateId: z.string().uuid().optional().nullable(),
+  contactId: z.string().uuid().optional().nullable(),
+  kind: z.enum(['campaign', 'follow_up']).default('campaign'),
+  payload: z.record(z.unknown()).default({}),
+  scheduledFor: z.string().datetime()
+});
+
+app.get('/conversations', requireAuth, asyncRoute(async (req, res) => {
+  const status = ['open', 'resolved'].includes(String(req.query.status)) ? String(req.query.status) : null;
+  const result = await databasePool.query(`
+    select c.*, ct.name as contact_name, ct.phone as contact_phone,
+      (select cm.body from public.conversation_messages cm where cm.conversation_id = c.id order by cm.created_at desc limit 1) as last_message
+    from public.conversations c join public.contacts ct on ct.id = c.contact_id
+    where c.user_id = $1 and ($2::text is null or c.status = $2)
+    order by c.last_message_at desc
+  `, [req.auth.sub, status]);
+  return res.json(result.rows);
+}));
+
+app.get('/conversations/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  if (!id) return;
+  const conversation = await databasePool.query(`select c.*, ct.name as contact_name, ct.phone as contact_phone from public.conversations c join public.contacts ct on ct.id = c.contact_id where c.id = $1 and c.user_id = $2`, [id, req.auth.sub]);
+  if (!conversation.rows[0]) return authError(res, 404, 'CONVERSATION_NOT_FOUND', 'Conversa não encontrada.');
+  const messages = await databasePool.query('select * from public.conversation_messages where conversation_id = $1 order by created_at asc', [id]);
+  return res.json({ ...conversation.rows[0], messages: messages.rows });
+}));
+
+app.post('/conversations', requireAuth, asyncRoute(async (req, res) => {
+  const input = validated(conversationInput, req.body, res);
+  if (!input) return;
+  const contact = await databasePool.query('select id from public.contacts where id = $1 and user_id = $2', [input.contactId, req.auth.sub]);
+  if (!contact.rows[0]) return authError(res, 404, 'CONTACT_NOT_FOUND', 'Contato não encontrado.');
+  const client = await databasePool.connect();
+  try {
+    await client.query('begin');
+    const conversation = await client.query('insert into public.conversations (user_id, contact_id, channel) values ($1, $2, $3) returning *', [req.auth.sub, input.contactId, input.channel]);
+    const message = await client.query('insert into public.conversation_messages (conversation_id, direction, body) values ($1, \'outbound\', $2) returning *', [conversation.rows[0].id, input.body]);
+    await client.query('commit');
+    return res.status(201).json({ conversation: conversation.rows[0], message: message.rows[0] });
+  } catch (error) {
+    await client.query('rollback');
+    throw error;
+  } finally { client.release(); }
+}));
+
+app.patch('/conversations/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  const input = validated(z.object({ status: z.enum(['open', 'resolved']).optional(), assignedTo: z.string().uuid().nullable().optional() }), req.body, res);
+  if (!id || !input) return;
+  const result = await databasePool.query('update public.conversations set status = coalesce($1, status), assigned_to = $2, updated_at = now() where id = $3 and user_id = $4 returning *', [input.status || null, input.assignedTo === undefined ? null : input.assignedTo, id, req.auth.sub]);
+  if (!result.rows[0]) return authError(res, 404, 'CONVERSATION_NOT_FOUND', 'Conversa não encontrada.');
+  return res.json(result.rows[0]);
+}));
+
+app.post('/conversations/:id/messages', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  const input = validated(z.object({ body: z.string().trim().min(1).max(10000) }), req.body, res);
+  if (!id || !input) return;
+  const conversation = await databasePool.query('select id from public.conversations where id = $1 and user_id = $2', [id, req.auth.sub]);
+  if (!conversation.rows[0]) return authError(res, 404, 'CONVERSATION_NOT_FOUND', 'Conversa não encontrada.');
+  const result = await databasePool.query('insert into public.conversation_messages (conversation_id, direction, body, status) values ($1, \'outbound\', $2, \'queued\') returning *', [id, input.body]);
+  await databasePool.query('update public.conversations set last_message_at = now(), updated_at = now() where id = $1', [id]);
+  return res.status(201).json(result.rows[0]);
+}));
+
+app.get('/templates', requireAuth, asyncRoute(async (req, res) => {
+  const result = await databasePool.query('select * from public.message_templates where user_id = $1 order by updated_at desc', [req.auth.sub]);
+  return res.json(result.rows);
+}));
+app.post('/templates', requireAuth, asyncRoute(async (req, res) => {
+  const input = validated(templateInput, req.body, res);
+  if (!input) return;
+  const result = await databasePool.query('insert into public.message_templates (user_id, name, body, channel, approval_status) values ($1, $2, $3, $4, $5) returning *', [req.auth.sub, input.name, input.body, input.channel, input.approvalStatus || 'draft']);
+  return res.status(201).json(result.rows[0]);
+}));
+app.patch('/templates/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  const input = validated(templateInput.partial(), req.body, res);
+  if (!id || !input) return;
+  const result = await databasePool.query('update public.message_templates set name = coalesce($1, name), body = coalesce($2, body), channel = coalesce($3, channel), approval_status = coalesce($4, approval_status), updated_at = now() where id = $5 and user_id = $6 returning *', [input.name, input.body, input.channel, input.approvalStatus, id, req.auth.sub]);
+  if (!result.rows[0]) return authError(res, 404, 'TEMPLATE_NOT_FOUND', 'Template não encontrado.');
+  return res.json(result.rows[0]);
+}));
+app.delete('/templates/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  if (!id) return;
+  const result = await databasePool.query('delete from public.message_templates where id = $1 and user_id = $2 returning id', [id, req.auth.sub]);
+  if (!result.rows[0]) return authError(res, 404, 'TEMPLATE_NOT_FOUND', 'Template não encontrado.');
+  return res.status(204).send();
+}));
+
+app.get('/schedule', requireAuth, asyncRoute(async (req, res) => {
+  const result = await databasePool.query('select * from public.scheduled_jobs where user_id = $1 order by scheduled_for asc', [req.auth.sub]);
+  return res.json(result.rows);
+}));
+app.post('/schedule', requireAuth, asyncRoute(async (req, res) => {
+  const input = validated(scheduleInput, req.body, res);
+  if (!input) return;
+  const result = await databasePool.query('insert into public.scheduled_jobs (user_id, campaign_id, template_id, contact_id, kind, payload, scheduled_for) values ($1, $2, $3, $4, $5, $6, $7) returning *', [req.auth.sub, input.campaignId, input.templateId, input.contactId, input.kind, JSON.stringify(input.payload), input.scheduledFor]);
+  return res.status(201).json(result.rows[0]);
+}));
+app.patch('/schedule/:id', requireAuth, asyncRoute(async (req, res) => {
+  const id = validated(idParam, req.params.id, res);
+  const input = validated(z.object({ status: z.enum(['scheduled', 'cancelled']).optional(), scheduledFor: z.string().datetime().optional() }), req.body, res);
+  if (!id || !input) return;
+  const result = await databasePool.query('update public.scheduled_jobs set status = coalesce($1, status), scheduled_for = coalesce($2, scheduled_for), updated_at = now() where id = $3 and user_id = $4 returning *', [input.status, input.scheduledFor, id, req.auth.sub]);
+  if (!result.rows[0]) return authError(res, 404, 'SCHEDULE_NOT_FOUND', 'Agendamento não encontrado.');
+  return res.json(result.rows[0]);
+}));
+
 app.use((error, req, res, next) => {
   if (res.headersSent) return next(error);
   console.error('API error:', error.code || error.message);

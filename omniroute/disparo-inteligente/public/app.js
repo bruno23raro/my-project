@@ -116,6 +116,9 @@ function render() {
           <div class="nav-panel" style="margin-top: 28px;">
             <button class="nav-item active" data-panel="overview">Visão geral</button>
             <button class="nav-item" data-panel="campaigns">Campanhas</button>
+                   <button class="nav-item" data-panel="inbox">Inbox</button>
+                   <button class="nav-item" data-panel="templates">Templates</button>
+                   <button class="nav-item" data-panel="schedule">Agenda</button>
             <button class="nav-item" data-panel="chatbot">Chatbot</button>
             <button class="nav-item" data-panel="integrations">Integrações</button>
             <button class="nav-item" data-panel="admin">Admin</button>
@@ -461,6 +464,41 @@ async function loadDashboardPanel(panel) {
       await fetchJson('/api/campaigns', { method: 'POST', body: JSON.stringify({ name, message }) });
       loadDashboardPanel('campaigns');
     });
+    return;
+  }
+
+  if (panel === 'inbox') {
+    const conversations = await fetchJson('/conversations');
+    const first = conversations[0];
+    content.innerHTML = `
+      <div class="section-head"><span class="kicker">Atendimento</span><h2>Inbox unificado</h2><p>Organize conversas de WhatsApp e Instagram em um só lugar.</p></div>
+      <div class="inbox-layout"><div class="panel conversation-list"><div class="panel-title"><h3>Conversas abertas</h3><span class="tag purple">${conversations.length}</span></div><div id="conversation-items">${conversations.map((item) => `<button class="conversation-item" data-conversation-id="${item.id}"><strong>${escapeHTML(item.contact_name || item.contact_phone)}</strong><small>${escapeHTML(item.channel)} · ${escapeHTML(item.last_message || 'Sem mensagens')}</small><span class="tag ${item.status === 'open' ? 'green' : 'purple'}">${item.status === 'open' ? 'Aberta' : 'Resolvida'}</span></button>`).join('') || '<div class="empty-state">Nenhuma conversa recebida ainda.</div>'}</div></div><div class="panel conversation-detail" id="conversation-detail"><div class="empty-state">Selecione uma conversa para ver o histórico.</div></div></div>
+    `;
+    async function showConversation(id) {
+      const item = await fetchJson(`/conversations/${id}`);
+      const detail = document.getElementById('conversation-detail');
+      detail.innerHTML = `<div class="panel-title"><div><span class="eyebrow">${escapeHTML(item.channel)}</span><h3>${escapeHTML(item.contact_name || item.contact_phone)}</h3><small>${escapeHTML(item.contact_phone)}</small></div><button class="btn secondary" id="resolve-conversation">${item.status === 'open' ? 'Marcar resolvida' : 'Reabrir conversa'}</button></div><div class="message-thread">${item.messages.map((message) => `<div class="message-bubble ${message.direction}"><p>${escapeHTML(message.body)}</p><small>${new Date(message.created_at).toLocaleString('pt-BR')}</small></div>`).join('')}</div><div class="reply-box"><textarea class="textarea" id="reply-body" rows="3" placeholder="Escreva uma resposta..."></textarea><button class="btn primary" id="send-reply">Enviar resposta</button></div>`;
+      document.getElementById('resolve-conversation').addEventListener('click', async () => { try { await fetchJson(`/conversations/${id}`, { method: 'PATCH', body: JSON.stringify({ status: item.status === 'open' ? 'resolved' : 'open' }) }); showToast('Status da conversa atualizado.'); await loadDashboardPanel('inbox'); } catch (error) { showToast(error.message, 'error'); } });
+      document.getElementById('send-reply').addEventListener('click', async () => { try { await fetchJson(`/conversations/${id}/messages`, { method: 'POST', body: JSON.stringify({ body: document.getElementById('reply-body').value }) }); showToast('Resposta enfileirada.'); await showConversation(id); } catch (error) { showToast(error.message, 'error'); } });
+    }
+    document.querySelectorAll('.conversation-item').forEach((button) => button.addEventListener('click', () => showConversation(button.dataset.conversationId)));
+    if (first) showConversation(first.id);
+    return;
+  }
+
+  if (panel === 'templates') {
+    const templates = await fetchJson('/templates');
+    content.innerHTML = `<div class="section-head"><span class="kicker">Biblioteca</span><h2>Templates de mensagem</h2><p>Use variáveis como {{nome}} para personalizar seus envios.</p></div><div class="panel"><div class="two-col"><input class="input" id="template-name" placeholder="Nome do template" /><select class="select" id="template-channel"><option value="whatsapp">WhatsApp</option><option value="instagram">Instagram</option><option value="both">WhatsApp e Instagram</option></select></div><textarea class="textarea" id="template-body" rows="4" placeholder="Olá {{nome}}, tudo bem?"></textarea><button class="btn primary" id="create-template">Criar template</button></div><div class="template-grid">${templates.map((item) => `<article class="panel template-card"><div class="panel-title"><div><h3>${escapeHTML(item.name)}</h3><span class="tag ${item.approval_status === 'approved' ? 'green' : 'purple'}">${escapeHTML(item.approval_status)}</span></div><button class="btn danger delete-template" data-id="${item.id}">Excluir</button></div><p>${escapeHTML(item.body)}</p><small>${escapeHTML(item.channel)}</small></article>`).join('')}</div>`;
+    document.getElementById('create-template').addEventListener('click', async () => { try { await fetchJson('/templates', { method: 'POST', body: JSON.stringify({ name: document.getElementById('template-name').value, body: document.getElementById('template-body').value, channel: document.getElementById('template-channel').value }) }); showToast('Template criado.'); await loadDashboardPanel('templates'); } catch (error) { showToast(error.message, 'error'); } });
+    document.querySelectorAll('.delete-template').forEach((button) => button.addEventListener('click', async () => { try { await fetchJson(`/templates/${button.dataset.id}`, { method: 'DELETE' }); showToast('Template excluído.'); await loadDashboardPanel('templates'); } catch (error) { showToast(error.message, 'error'); } }));
+    return;
+  }
+
+  if (panel === 'schedule') {
+    const [jobs, campaigns, templates] = await Promise.all([fetchJson('/schedule'), fetchJson('/campaigns'), fetchJson('/templates')]);
+    content.innerHTML = `<div class="section-head"><span class="kicker">Planejamento</span><h2>Agenda de envios</h2><p>Agende campanhas e follow-ups para a sua operação.</p></div><div class="panel"><div class="two-col"><select class="select" id="schedule-kind"><option value="campaign">Campanha</option><option value="follow_up">Follow-up</option></select><select class="select" id="schedule-campaign"><option value="">Selecione uma campanha</option>${campaigns.map((item) => `<option value="${item.id}">${escapeHTML(item.name)}</option>`).join('')}</select><select class="select" id="schedule-template"><option value="">Selecione um template</option>${templates.map((item) => `<option value="${item.id}">${escapeHTML(item.name)}</option>`).join('')}</select><input class="input" id="schedule-date" type="datetime-local" /></div><button class="btn primary" id="create-schedule">Agendar envio</button></div><div class="panel" style="margin-top:20px;"><table class="table"><thead><tr><th>Tipo</th><th>Agendado para</th><th>Status</th><th>Ação</th></tr></thead><tbody>${jobs.map((job) => `<tr><td>${escapeHTML(job.kind)}</td><td>${new Date(job.scheduled_for).toLocaleString('pt-BR')}</td><td><span class="tag ${job.status === 'scheduled' ? 'green' : 'purple'}">${escapeHTML(job.status)}</span></td><td>${job.status === 'scheduled' ? `<button class="btn danger cancel-schedule" data-id="${job.id}">Cancelar</button>` : '-'}</td></tr>`).join('') || '<tr><td colspan="4">Nenhum agendamento.</td></tr>'}</tbody></table></div>`;
+    document.getElementById('create-schedule').addEventListener('click', async () => { try { const date = new Date(document.getElementById('schedule-date').value); await fetchJson('/schedule', { method: 'POST', body: JSON.stringify({ kind: document.getElementById('schedule-kind').value, campaignId: document.getElementById('schedule-campaign').value || null, templateId: document.getElementById('schedule-template').value || null, scheduledFor: date.toISOString() }) }); showToast('Envio agendado.'); await loadDashboardPanel('schedule'); } catch (error) { showToast(error.message, 'error'); } });
+    document.querySelectorAll('.cancel-schedule').forEach((button) => button.addEventListener('click', async () => { try { await fetchJson(`/schedule/${button.dataset.id}`, { method: 'PATCH', body: JSON.stringify({ status: 'cancelled' }) }); showToast('Agendamento cancelado.'); await loadDashboardPanel('schedule'); } catch (error) { showToast(error.message, 'error'); } }));
     return;
   }
 
